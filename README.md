@@ -1,24 +1,71 @@
-[![Scrutinizer Code Quality](https://scrutinizer-ci.com/g/nextcloud/zenodo/badges/quality-score.png?b=master)](https://scrutinizer-ci.com/g/nextcloud/zenodo/?branch=master)
+# Zenodo integration for Nextcloud
 
-Based on files_zenodo from Lars Naesbye Christensen, DeIC for ownCloud - https://github.com/deic-dk/files_zenodo
+Publish your work on [Zenodo.org](https://zenodo.org) directly from the Nextcloud
+Files app.
 
-# Publish your work on Zenodo.org
+Based on files_zenodo from Lars Naesbye Christensen, DeIC for ownCloud, and on
+the original Nextcloud zenodo app by Maxence Lange. This fork modernizes the app
+for Nextcloud 33 to 36 and migrates it to the current Zenodo (InvenioRDM) REST
+API.
 
 ![example screenshot](screenshots/dialogpopup.png)
 
-Zenodo helps your users sharing and managing their research work using Zenodo.org data repository.
+## What it does
 
-## Dependencies 
- * nextcloud 10 (tested on nc12)
+From the file actions menu of any file, users can:
 
-## Installation instructions
-Copy the app files to the **nextcloud/apps/** directory.
-In the Admin Interface, fill the data with the tokens from Zenodo.org (Sandbox and/or Production token).
+- **New Zenodo deposition**: create a draft record on Zenodo with the file
+  attached (metadata, creators, access rights, license, embargo). The draft is
+  then reviewed and published by the user on zenodo.org.
+- **Add file to a Zenodo deposition**: attach the file to one of their existing
+  unpublished depositions. Only the owner of a deposition can add files to it.
 
-## Usage
-From the Files App, your users now have the possibility to create a Deposition from the File Action Menu. The creation of a new deposition is done in a dialog popup, asking for details about the Deposition and a list of Author/Creator of the uploaded document. If the Orcid App is installed, and the target user updated their Orcid data in the Personal Interface, adding a user to the Authors list will directly add its ORCID to the Zenodo form. 
+Files already sent to the production Zenodo cannot be published again.
 
-Users can also add/upload files/documents to an existing Deposition, using the File Action Menu. Upload of new file to an already created Deposition is limited to the owner of the Deposition (the user who created the Deposition).
+## Requirements
 
+- Nextcloud 33, 34, 35 or 36
+- A Zenodo account (one for sandbox, one for production)
 
+## Installation
 
+Copy the app files to the **nextcloud/apps/** directory and enable it. Release
+tarballs already contain the compiled frontend (`js/`).
+
+When installing from a git checkout, build the frontend first:
+
+```bash
+npm install
+npm run build
+```
+
+### Tokens
+
+In the admin interface (**Additional settings → Zenodo**), store one access
+token per environment:
+
+- Sandbox: create an account on sandbox.zenodo.org, then generate a personal
+  access token with the **deposit:write** scope
+  (Settings → Applications → Personal access tokens).
+- Production: same on zenodo.org.
+
+Tokens are stored as server-wide app configuration; all requests to Zenodo are
+performed with the token owner's account. Sandbox and production are separate
+services, so the tokens are not interchangeable.
+
+## Development
+
+```bash
+npm install
+npm run build    # production build into js/ (committed)
+npm run dev      # rebuild on file change
+```
+
+Lint the PHP sources (no local PHP required, e.g. via docker):
+
+```bash
+find lib appinfo -name '*.php' -exec php -l {} \;
+```
+
+There is no composer.json: the app only uses the `OCP` interfaces provided by
+the Nextcloud server itself.

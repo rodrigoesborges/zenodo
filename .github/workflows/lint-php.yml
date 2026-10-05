@@ -1,0 +1,25 @@
+name: PHP Lint
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+      - main
+      - stable*
+
+jobs:
+  php-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: 8.3
+          coverage: none
+
+      - name: Lint
+        run: find lib appinfo -name '*.php' -exec php -l {} \;

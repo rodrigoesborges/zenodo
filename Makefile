@@ -7,10 +7,10 @@ source_dir=$(build_dir)/source
 sign_dir=$(build_dir)/sign
 package_name=$(app_name)
 cert_dir=$(HOME)/.nextcloud/certificates
-github_account=nextcloud
+github_account=rodrigoesborges
 branch=master
 codecov_token_dir=$(HOME)/.nextcloud/codecov_token
-version+=1.1.1
+version+=2.0.0
 
 all: appstore
 
@@ -60,6 +60,13 @@ appstore: clean
 	--exclude=/.scrutinizer.yml \
 	--exclude=/.travis.yml \
 	--exclude=/Makefile \
+	--exclude=/AGENTS.md \
+	--exclude=/node_modules \
+	--exclude=/src \
+	--exclude=/vendor \
+	--exclude=/package.json \
+	--exclude=/package-lock.json \
+	--exclude=/vite.config.mjs \
 	$(project_dir)/ $(sign_dir)/$(app_name)
 	tar -czf $(build_dir)/$(app_name)-$(version).tar.gz \
 		-C $(sign_dir) $(app_name)
@@ -67,4 +74,3 @@ appstore: clean
 		echo "Signing package…"; \
 		openssl dgst -sha512 -sign $(cert_dir)/$(app_name).key $(build_dir)/$(app_name)-$(version).tar.gz | openssl base64; \
 	fi
-
