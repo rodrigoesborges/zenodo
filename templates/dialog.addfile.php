@@ -28,16 +28,13 @@
 
 	<table>
 		<tr>
-			<td class="zendialog_left">Deposition:</td>
+			<td class="zendialog_left"><?php p($l->t('Deposition:')); ?></td>
 			<td>
 
-				<select
-					id="zendialog_deposition">
+				<select id="zendialog_deposition">
 				</select>
 			</td>
 		</tr>
-
-
 
 	</table>
 

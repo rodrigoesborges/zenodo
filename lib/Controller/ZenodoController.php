@@ -1,5 +1,4 @@
 <?php
-
 /**
  * Zenodo - Publish your work to Zenodo.org
  *
@@ -23,242 +22,222 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
+
 namespace OCA\Zenodo\Controller;
 
-use \OCA\Zenodo\Model\iError;
-use \OCA\Zenodo\Service\ConfigService;
-use \OCA\Zenodo\Service\MiscService;
-use \OCA\Zenodo\Service\ApiService;
-use \OCA\Zenodo\Model\DepositionFile;
-use \OCA\Zenodo\Db\DepositionFilesMapper;
-use \OCA\Zenodo\Db\DepositionFiles;
+use OCA\Zenodo\Db\DepositionFiles;
+use OCA\Zenodo\Db\DepositionFilesMapper;
+use OCA\Zenodo\Exceptions\ZenodoApiException;
+use OCA\Zenodo\Service\ApiService;
+use OCA\Zenodo\Service\FileService;
 use OCP\AppFramework\Controller;
+use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\TemplateResponse;
+use OCP\Files\File;
 use OCP\IRequest;
+use OCP\IUserManager;
+use OCP\IUserSession;
+use Psr\Log\LoggerInterface;
 
 class ZenodoController extends Controller {
 
-
-	private $userId;
-	private $userManager;
-	private $configService;
-	private $apiService;
-	private $depositionFilesMapper;
-	private $miscService;
-
 	public function __construct(
-		$appName, IRequest $request, $userId, $userManager, ConfigService $configService,
-		ApiService $apiService,
-		DepositionFilesMapper $depositionFilesMapper,
-		MiscService $miscService
+		string $appName,
+		IRequest $request,
+		private IUserSession $userSession,
+		private IUserManager $userManager,
+		private ApiService $apiService,
+		private FileService $fileService,
+		private DepositionFilesMapper $depositionFilesMapper,
+		private LoggerInterface $logger
 	) {
 		parent::__construct($appName, $request);
-		$this->userId = $userId;
-		$this->userManager = $userManager;
-		$this->configService = $configService;
-		$this->apiService = $apiService;
-		$this->depositionFilesMapper = $depositionFilesMapper;
-		$this->miscService = $miscService;
 	}
 
-	//
-	// Admin
-	//
+	#[NoAdminRequired]
+	public function dialogZenodo(string $type): TemplateResponse {
+		$template = match ($type) {
+			'AddFile' => 'dialog.addfile',
+			default => 'dialog.newdeposition',
+		};
 
-	/**
-	 * @NoCSRFRequired
-	 * @NoAdminRequired
-	 */
-	public function dialogZenodo($type) {
-		switch ($type) {
-			case 'NewDeposition':
-				return new TemplateResponse($this->appName, 'dialog.newdeposition', [], 'blank');
-
-			case 'AddFile':
-				return new TemplateResponse($this->appName, 'dialog.addfile', [], 'blank');
-		}
-
+		return new TemplateResponse($this->appName, $template, [], 'blank');
 	}
 
+	#[NoAdminRequired]
+	public function getZenodoDeposit($fileId, $filename): array {
+		$deposition = $this->depositionFilesMapper->findFile((int)$fileId);
 
-	/**
-	 * @NoCSRFRequired
-	 * @NoAdminRequired
-	 */
-	public function getUnsubmittedDepositionsFromZenodo() {
-
-		$iError = new iError();
-		$success = false;
-		$data = array();
-
-		if ($this->apiService->init(false, $iError)) {
-
-			$depositions = $this->apiService->list_deposition($iError);
-			foreach ($depositions as $entry) {
-				if ($entry->state === 'unsubmitted') {
-					$more = $this->depositionFilesMapper->findDeposit($entry->id);
-					if ($more !== null && $more->getUserId() === $this->userId) {
-						$data[] = array(
-							'title'      => '(sandbox) ' . $entry->title,
-							'production' => 'false',
-							'depositid'  => $entry->id
-						);
-					}
-				}
-			}
-
-			$success = true;
-		}
-
-		if ($this->apiService->init(true, $iError)) {
-
-			$depositions = $this->apiService->list_deposition($iError);
-			foreach ($depositions as $entry) {
-				if ($entry->state === 'unsubmitted') {
-					$more = $this->depositionFilesMapper->findDeposit($entry->id);
-					if ($more !== null && $more->getUserId() === $this->userId) {
-						$data[] = array(
-							'title'      => $entry->title,
-							'production' => 'true',
-							'depositid'  => $entry->id
-						);
-					}
-				}
-			}
-
-			$success = true;
-		}
-
-		$response = array(
-			'error'   => $iError->toArray(),
-			'success' => $success,
-			'data'    => $data
-		);
-
-		return $response;
+		return [
+			'fileId' => (int)$fileId,
+			'filename' => $filename,
+			'type' => ($deposition !== null) ? $deposition->getType() : '',
+			'depositId' => ($deposition !== null) ? (int)$deposition->getDepositId() : 0
+		];
 	}
 
-
-	/**
-	 * @NoCSRFRequired
-	 * @NoAdminRequired
-	 */
-	public function publishToZenodo($fileid, $metadata, $production) {
-
-		$iError = new iError();
-		$published = false;
-		if ($this->apiService->init(($production === 'true') ? true : false, $iError)
-			&& ($deposition =
-				$this->apiService->create_deposition(array('metadata' => $metadata), $iError))
-			&& $this->apiService->upload_file($deposition->id, $fileid, $iError)
-		) {
-
-			$item = new DepositionFile();
-			$item->setFileId($fileid);
-			$item->setUserId($this->userId);
-			$item->setType((($production === 'true') ? 'prod' : 'sandbox'));
-			$item->setDepositId($deposition->id);
-			$this->depositionFilesMapper->deleteFile(new DepositionFiles($item), false);
-			$this->depositionFilesMapper->insert(new DepositionFiles($item));
-
-			//DepositionFilesMapper::insertDeposition($result);
-
-
-			$published = true;
-		}
-
-		$response = array(
-			'error'     => $iError->toArray(),
-			'published' => $published
-		);
-
-		return $response;
-	}
-
-
-	/**
-	 * @NoCSRFRequired
-	 * @NoAdminRequired
-	 */
-	public function uploadToZenodo($depositid, $fileid, $production) {
-
-		$iError = new iError();
-		$published = false;
-
-		$more = $this->depositionFilesMapper->findDeposit($depositid);
-		if ($more === null || $more->getUserId() !== $this->userId) {
-			$iError->setMessage("This is not your deposition");
-		} else {
-
-			if ($this->apiService->init(($production === 'true') ? true : false, $iError)
-				&& $this->apiService->upload_file($depositid, $fileid, $iError)
-			) {
-				$item = new DepositionFile();
-				$item->setFileId($fileid);
-				$item->setUserId($this->userId);
-				$item->setType((($production === 'true') ? 'prod' : 'sandbox'));
-				$item->setDepositId($depositid);
-				$this->depositionFilesMapper->deleteFile(new DepositionFiles($item), false);
-				$this->depositionFilesMapper->insert(new DepositionFiles($item));
-
-				$published = true;
-			}
-		}
-		$response = array(
-			'error'     => $iError->toArray(),
-			'published' => $published
-		);
-
-		return $response;
-	}
-
-
-	/**
-	 * @NoAdminRequired
-	 */
-	public function getZenodoDeposit($fileid, $filename) {
-		$depositFile = $this->depositionFilesMapper->findfile($fileid);
-		$response = array(
-			'fileid'    => $fileid,
-			'filename'  => $filename,
-			'type'      => (($depositFile === null) ? '' : $depositFile->getType()),
-			'depositid' => (($depositFile === null) ? 0 : $depositFile->getDepositId())
-		);
-
-		return $response;
-	}
-
-
-	/**
-	 * @NoAdminRequired
-	 */
-	public function getLocalCreator($username) {
-
+	#[NoAdminRequired]
+	public function getLocalCreator($username): array {
 		if ($username === '_self') {
-			$username = $this->userId;
+			$username = $this->getUserId();
 		}
-
-		$orcid = '';
-		$realname = '';
 
 		$user = $this->userManager->get($username);
-		if ($user != null) {
 
-			$realname = $user->getDisplayName();
+		return [
+			'realname' => ($user !== null) ? $user->getDisplayName() : $username,
+			'orcid' => $this->getOrcid($username)
+		];
+	}
 
-			if (\OCP\App::isEnabled('orcid')) {
-				$orcid = \OCA\Orcid\Service\ApiService::getUserOrcid($username);
+	#[NoAdminRequired]
+	public function getUnsubmittedDepositionsFromZenodo(): array {
+		$result = ['success' => true, 'data' => [], 'errors' => []];
+
+		foreach ([false, true] as $production) {
+			$this->apiService->init($production);
+			if (!$this->apiService->isConfigured()) {
+				continue;
+			}
+
+			try {
+				$drafts = $this->apiService->listDrafts();
+			} catch (ZenodoApiException $e) {
+				$result['errors'][] = ($production ? 'production: ' : 'sandbox: ') . $e->getMessage();
+				continue;
+			}
+
+			foreach ($drafts as $draft) {
+				$deposition = $this->depositionFilesMapper->findDeposit((int)$draft->id);
+				if ($deposition === null || $deposition->getUserId() !== $this->getUserId()) {
+					continue;
+				}
+
+				$result['data'][] = [
+					'id' => (int)$draft->id,
+					'title' => $draft->metadata->title ?? ('#' . $draft->id),
+					'production' => $production
+				];
 			}
 		}
 
-		$response = array(
-			'realname' => $realname,
-			'orcid'    => $orcid
-		);
+		return $result;
+	}
 
-		return $response;
+	#[NoAdminRequired]
+	public function publishToZenodo($fileId, array $metadata, $production): array {
+		$production = ($production === true || $production === 'true');
+		$this->apiService->init($production);
+
+		if (!$this->apiService->isConfigured()) {
+			return $this->error('No Zenodo token defined. Please contact your administrator.');
+		}
+
+		$node = $this->getFileNode($fileId);
+		if ($node === null) {
+			return $this->error('File not found.');
+		}
+
+		try {
+			$draft = $this->apiService->createDraft($metadata);
+			$this->uploadNode((int)$draft->id, $node);
+		} catch (ZenodoApiException $e) {
+			return $this->error($e->getMessage());
+		}
+
+		$this->storeDepositionFile((int)$fileId, (int)$draft->id, $production ? 'prod' : 'sandbox');
+
+		return [
+			'success' => true,
+			'depositUrl' => $draft->links->self_html ?? null,
+			'depositId' => (int)$draft->id
+		];
+	}
+
+	#[NoAdminRequired]
+	public function uploadToZenodo($depositId, $fileId, $production): array {
+		$deposition = $this->depositionFilesMapper->findDeposit((int)$depositId);
+		if ($deposition === null || $deposition->getUserId() !== $this->getUserId()) {
+			return $this->error('This is not your deposition.');
+		}
+
+		$production = ($production === true || $production === 'true');
+		$this->apiService->init($production);
+
+		if (!$this->apiService->isConfigured()) {
+			return $this->error('No Zenodo token defined. Please contact your administrator.');
+		}
+
+		$node = $this->getFileNode($fileId);
+		if ($node === null) {
+			return $this->error('File not found.');
+		}
+
+		try {
+			$this->uploadNode((int)$depositId, $node);
+		} catch (ZenodoApiException $e) {
+			return $this->error($e->getMessage());
+		}
+
+		return ['success' => true, 'depositId' => (int)$depositId];
+	}
+
+	private function getUserId(): string {
+		return $this->userSession->getUser()?->getUID() ?? '';
+	}
+
+	private function getFileNode($fileId): ?File {
+		return $this->fileService->getFilesPerFileId((int)$fileId)[0] ?? null;
+	}
+
+	/**
+	 * @throws ZenodoApiException
+	 */
+	private function uploadNode(int $depositId, File $node): void {
+		$local = $this->fileService->getLocalFile($node);
+		if ($local === null) {
+			throw new ZenodoApiException('Cannot access the content of the file.');
+		}
+
+		try {
+			$this->apiService->uploadFile($depositId, $local['path'], $node->getName());
+		} finally {
+			if ($local['temporary']) {
+				@unlink($local['path']);
+			}
+		}
+	}
+
+	private function storeDepositionFile(int $fileId, int $depositId, string $type): void {
+		$this->depositionFilesMapper->deleteFile($fileId, false);
+
+		$deposition = new DepositionFiles();
+		$deposition->setUserId($this->getUserId());
+		$deposition->setFileId($fileId);
+		$deposition->setType($type);
+		$deposition->setDepositId($depositId);
+
+		$this->depositionFilesMapper->insert($deposition);
+	}
+
+	private function getOrcid(string $username): string {
+		try {
+			if (!\OCP\App::isEnabled('orcid')) {
+				return '';
+			}
+
+			return (string)\OCA\Orcid\Service\ApiService::getUserOrcid($username);
+		} catch (\Throwable $e) {
+			$this->logger->debug('could not retrieve the ORCID of a user', [
+				'username' => $username,
+				'exception' => $e,
+			]);
+
+			return '';
+		}
+	}
+
+	private function error(string $message): array {
+		return ['success' => false, 'error' => $message];
 	}
 }
-
-
-

@@ -23,46 +23,22 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-namespace OCA\Zenodo\Model;
+namespace OCA\Zenodo\Settings;
 
-class iError {
+use OCP\AppFramework\Http\TemplateResponse;
+use OCP\Settings\ISettings;
 
-	const TOKEN_MISSING = 1001;
+class Admin implements ISettings {
 
-	private $messages = array();
-	private $code;
-
-	function __construct() {
+	public function getForm(): TemplateResponse {
+		return new TemplateResponse('zenodo', 'settings.admin');
 	}
 
-	public function setMessage($message) {
-		array_push($this->messages, $message);
-
-		return $this;
+	public function getSection(): string {
+		return 'additional';
 	}
 
-	public function getMessages() {
-		return $this->messages;
+	public function getPriority(): int {
+		return 0;
 	}
-
-
-	public function setCode($code) {
-		$this->code = $code;
-
-		return $this;
-	}
-
-	public function getCode() {
-		return $this->code;
-	}
-
-
-	public function toArray() {
-		return array(
-			'code'     => $this->getCode(),
-			'messages' => $this->getMessages()
-		);
-	}
-
-
 }

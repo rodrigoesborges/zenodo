@@ -26,47 +26,44 @@
 return [
 	'routes' => [
 		[
-			'name' => 'settings#getZenodoInfo',
-			'url'  => 'ajax/settings/getZenodoInfo.php',
-			'verb' => 'POST'
+			'name'     => 'settings#getZenodoInfo',
+			'url'      => '/settings',
+			'verb'     => 'GET'
 		],
 		[
-			'name' => 'settings#setZenodoInfo',
-			'url'  => 'ajax/settings/setZenodoInfo.php',
-			'verb' => 'POST'
+			'name'     => 'settings#setZenodoInfo',
+			'url'      => '/settings',
+			'verb'     => 'POST'
 		],
 		[
-			'name' => 'Zenodo#publishToZenodo',
-			'url'  => 'ajax/publishToZenodo.php',
-			'verb' => 'POST'
+			'name'     => 'Zenodo#dialogZenodo',
+			'url'      => '/dialog/{type}',
+			'verb'     => 'GET'
 		],
 		[
-			'name' => 'Zenodo#uploadToZenodo',
-			'url'  => 'ajax/uploadToZenodo.php',
-			'verb' => 'POST'
+			'name'     => 'Zenodo#getZenodoDeposit',
+			'url'      => '/deposit',
+			'verb'     => 'GET'
 		],
 		[
-			'name' => 'Zenodo#getZenodoDeposit',
-			'url'  => 'ajax/getZenodoDeposit.php',
-			'verb' => 'POST'
+			'name'     => 'Zenodo#publishToZenodo',
+			'url'      => '/depositions',
+			'verb'     => 'POST'
 		],
 		[
-			'name' => 'Zenodo#getUnsubmittedDepositionsFromZenodo',
-			'url'  => 'ajax/getUnsubmittedDepositionsFromZenodo.php',
-			'verb' => 'POST'
+			'name'     => 'Zenodo#uploadToZenodo',
+			'url'      => '/depositions/files',
+			'verb'     => 'POST'
 		],
 		[
-			'name' => 'Zenodo#dialogZenodo',
-			'url'  => 'ajax/getZenodoDialog.php',
-			'verb' => 'GET'
+			'name'     => 'Zenodo#getUnsubmittedDepositionsFromZenodo',
+			'url'      => '/depositions/unsubmitted',
+			'verb'     => 'GET'
 		],
 		[
-			'name' => 'Zenodo#getLocalCreator',
-			'url'  => 'ajax/getLocalCreator.php',
-			'verb' => 'POST'
+			'name'     => 'Zenodo#getLocalCreator',
+			'url'      => '/creator',
+			'verb'     => 'GET'
 		]
-
 	]
 ];
-
-

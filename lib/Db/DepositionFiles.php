@@ -25,9 +25,18 @@
 
 namespace OCA\Zenodo\Db;
 
-use \OCA\Zenodo\Model\DepositionFile;
 use OCP\AppFramework\Db\Entity;
 
+/**
+ * @method int getFileId()
+ * @method void setFileId(int $fileId)
+ * @method string getUserId()
+ * @method void setUserId(string $userId)
+ * @method string getType()
+ * @method void setType(string $type)
+ * @method int getDepositId()
+ * @method void setDepositId(int $depositId)
+ */
 class DepositionFiles extends Entity {
 
 	public $userId;
@@ -35,13 +44,8 @@ class DepositionFiles extends Entity {
 	public $type;
 	public $depositId;
 
-	public function __construct(DepositionFile $item = null) {
-		if ($item != null) {
-			$this->setFileId($item->getFileId());
-			$this->setUserId($item->getUserId());
-			$this->setType($item->getType());
-			$this->setDepositId($item->getDepositId());
-		}
+	public function __construct() {
+		$this->addType('fileId', 'integer');
+		$this->addType('depositId', 'integer');
 	}
 }
-

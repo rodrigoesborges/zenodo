@@ -25,248 +25,296 @@
 
 namespace OCA\Zenodo\Service;
 
+use OCA\Zenodo\Exceptions\ZenodoApiException;
 
-use \OCA\Zenodo\Model\iError;
-use \OCA\Zenodo\Service\ConfigService;
-use \OCA\Zenodo\Service\FileService;
-use \OCA\Zenodo\Service\MiscService;
-use OCP\AppFramework\Controller;
-use OCP\AppFramework\Http\TemplateResponse;
-use OCP\IRequest;
-
+/**
+ * Client for the current Zenodo (InvenioRDM) REST API.
+ *
+ * The app only creates draft records and uploads files to them; the final
+ * review and publication is done by the user on zenodo.org.
+ */
 class ApiService {
 
-	const ZENODO_DOMAIN_SANDBOX = 'https://sandbox.zenodo.org/';
-	const ZENODO_DOMAIN_PRODUCTION = 'https://zenodo.org/';
+	private const API_SANDBOX = 'https://sandbox.zenodo.org/api';
+	private const API_PRODUCTION = 'https://zenodo.org/api';
 
-	const ZENODO_API_DEPOSITIONS_LIST = 'api/deposit/depositions?';
-	const ZENODO_API_DEPOSITIONS_CREATE = 'api/deposit/depositions?';
-	const ZENODO_API_DEPOSITIONS_FILES_UPLOAD = 'api/deposit/depositions/%ID%/files?';
+	private ConfigService $configService;
+	private bool $production = false;
+	private string $token = '';
 
-	const REQUEST_TYPE_POST = 'post';
-	const REQUEST_TYPE_GET = 'get';
-
-	private $configService;
-	private $fileService;
-	private $miscService;
-
-	private $production = false;
-	private $token = '';
-
-	public function __construct(
-		ConfigService $configService, FileService $fileService, MiscService $miscService
-	) {
+	public function __construct(ConfigService $configService) {
 		$this->configService = $configService;
-		$this->fileService = $fileService;
-		$this->miscService = $miscService;
 	}
-
-
-	public function init($production, &$iError = null) {
-
-		if ($iError === null) {
-			$iError = new $iError();
-		}
-
-		$this->production = $production;
-		$this->initToken();
-
-		if ($this->token === '') {
-			$iError->setCode(iError::TOKEN_MISSING)
-				   ->setMessage(
-					   'No token defined for this operation; please contact your Nextcloud administrator'
-				   );
-
-			return false;
-		}
-
-		return true;
-	}
-
-	public function configured() {
-		if ($this->token === '') {
-			return false;
-		}
-
-		return true;
-	}
-
-	private function initToken() {
-
-		if ($this->production === true) {
-			$this->token =
-				$this->configService->getAppValue(ConfigService::ZENODO_TOKEN_PRODUCTION);
-		} else {
-			$this->token = $this->configService->getAppValue(ConfigService::ZENODO_TOKEN_SANDBOX);
-		}
-	}
-
-
-	private function generateUrl($path) {
-
-		if (!$this->configured()) {
-			return false;
-		}
-
-		if ($this->production === true) {
-			$url = self::ZENODO_DOMAIN_PRODUCTION;
-		} else {
-			$url = self::ZENODO_DOMAIN_SANDBOX;
-		}
-
-		return sprintf("%s%saccess_token=%s", $url, $path, $this->token);
-	}
-
 
 	/**
-	 * list all depositions from Zenodo
-	 *
-	 * @param null $iError
-	 *
-	 * @return bool|mixed
+	 * Select the target (sandbox or production) and load its token.
 	 */
-	public function list_deposition(&$iError = null) {
+	public function init(bool $production): void {
+		$this->production = $production;
+		$this->token = $production
+			? $this->configService->getAppValue(ConfigService::TOKEN_PRODUCTION)
+			: $this->configService->getAppValue(ConfigService::TOKEN_SANDBOX);
+	}
 
-		if ($iError === null) {
-			$iError = new $iError();
-		}
+	public function isConfigured(): bool {
+		return $this->token !== '';
+	}
 
-		if (!$this->configured()) {
-			return false;
-		}
-
-		$url = $this->generateURl(self::ZENODO_API_DEPOSITIONS_LIST);
-		$result = self::curlIt(
-			$url, array(
-					'type' => self::REQUEST_TYPE_GET
-				)
+	/**
+	 * Create a new draft record on Zenodo. Returns the API draft object
+	 * (contains id and links, including links->self_html).
+	 *
+	 * @throws ZenodoApiException
+	 */
+	public function createDraft(array $form): object {
+		$result = $this->request(
+			'POST', '/records', [
+				'json' => $this->buildDraftPayload($form),
+			]
 		);
+
+		if (!isset($result->id)) {
+			throw new ZenodoApiException('Unexpected response from Zenodo while creating the draft record.');
+		}
 
 		return $result;
 	}
 
 	/**
-	 * Create a new deposition on Zenodo
+	 * Upload a local file to a draft record, using the initialize/upload/commit
+	 * flow of the InvenioRDM files API.
 	 *
-	 * @param $metadata
-	 * @param null $iError
-	 *
-	 * @return bool|mixed
+	 * @throws ZenodoApiException
 	 */
-	public function create_deposition($metadata, &$iError = null) {
-
-		if ($iError === null) {
-			$iError = new $iError();
-		}
-
-		if (!$this->configured()) {
-			return false;
-		}
-
-		$url = $this->generateURl(self::ZENODO_API_DEPOSITIONS_CREATE);
-		$result = self::curlIt(
-			$url, array(
-					'type'   => self::REQUEST_TYPE_POST,
-					'params' => json_encode($metadata)
-				)
+	public function uploadFile(int $depositId, string $localPath, string $fileName): void {
+		$this->request(
+			'POST', sprintf('/records/%d/draft/files', $depositId), [
+				'json' => [['key' => $fileName]],
+			]
 		);
 
-		if (property_exists($result, 'created')) {
-			return $result;
-		}
+		$this->request(
+			'PUT', sprintf('/records/%d/draft/files/%s/content', $depositId, rawurlencode($fileName)), [
+				'file' => $localPath,
+			]
+		);
 
-		$iError->setCode($result->status);
-		if (sizeof($result->errors) > 0) {
-			foreach ($result->errors as $error) {
-				$iError->setMessage($error->field . ' - ' . $error->message);
+		$this->request(
+			'POST', sprintf('/records/%d/draft/files/%s/commit', $depositId, rawurlencode($fileName))
+		);
+	}
+
+	/**
+	 * List the draft (unpublished) records of the configured Zenodo account.
+	 *
+	 * @return object[]
+	 * @throws ZenodoApiException
+	 */
+	public function listDrafts(): array {
+		$result = $this->request('GET', '/user/records?size=100&sort=newest');
+		$hits = $result->hits->hits ?? [];
+
+		$drafts = [];
+		foreach ($hits as $hit) {
+			if (($hit->status ?? 'draft') !== 'published') {
+				$drafts[] = $hit;
 			}
 		}
 
-		return false;
+		return $drafts;
 	}
 
+	/**
+	 * Build the payload for POST /api/records from the form data sent by the
+	 * front-end.
+	 */
+	private function buildDraftPayload(array $form): array {
+		$metadata = [
+			'title' => trim((string)($form['title'] ?? '')),
+			'publication_date' => trim((string)($form['publicationDate'] ?? '')) ?: date('Y-m-d'),
+			'description' => trim((string)($form['description'] ?? '')),
+			'creators' => $this->mapCreators($form['creators'] ?? []),
+			'resource_type' => ['id' => $this->mapResourceType($form)],
+		];
 
-	// Add a file to Deposition
-	public function upload_file($depositionid, $fileid, &$iError = null) {
-
-		$files = $this->fileService->getFilesPerFileId($fileid);
-		if (sizeof($files) == 0) {
-			return false;
+		$license = trim((string)($form['license'] ?? ''));
+		if ($license !== '') {
+			$metadata['rights'] = [['id' => $license]];
 		}
 
-		$url = $this->generateURl(
-			str_replace('%ID%', $depositionid, self::ZENODO_API_DEPOSITIONS_FILES_UPLOAD)
-		);
+		return [
+			'access' => $this->mapAccess($form),
+			'files' => ['enabled' => true],
+			'metadata' => $metadata,
+		];
+	}
 
-		foreach ($files as $file) {
+	private function mapResourceType(array $form): string {
+		$type = (string)($form['uploadType'] ?? 'other');
 
-			$filepath = FileService::getAbsolutePath($file);
-			if (version_compare(PHP_VERSION, '5.5.0') >= 0) {
-				$post = array(
-					'file' => curl_file_create($filepath),
-					'name' => basename($filepath)
-				);
+		if ($type === 'publication') {
+			$sub = trim((string)($form['publicationType'] ?? ''));
+
+			return 'publication-' . ($sub !== '' ? $sub : 'other');
+		}
+
+		if ($type === 'image') {
+			$sub = trim((string)($form['imageType'] ?? ''));
+
+			return 'image-' . ($sub !== '' ? $sub : 'other');
+		}
+
+		return $type !== '' ? $type : 'other';
+	}
+
+	private function mapCreators(array $creators): array {
+		$result = [];
+		foreach ($creators as $creator) {
+			$name = trim((string)($creator['name'] ?? ''));
+			if ($name === '') {
+				continue;
+			}
+
+			if (str_contains($name, ',')) {
+				[$family, $given] = array_map('trim', explode(',', $name, 2));
+				$person = [
+					'type' => 'personal',
+					'family_name' => $family,
+					'given_name' => $given,
+				];
 			} else {
-				$post = array(
-					'file' => '@' . $filepath,
-					'name' => basename($filepath)
-				);
+				$person = [
+					'type' => 'organizational',
+					'name' => $name,
+				];
 			}
 
-			$result = self::curlIt(
-				$url, array(
-						'type'         => self::REQUEST_TYPE_POST,
-						'params'       => $post,
-						'content-type' => 'multipart/form-data'
-					)
-			);
-
-			if (property_exists($result, 'status') && $result->status === 400) {
-				$iError = new iError();
-				$iError->setCode($result->status)
-					   ->setMessage(
-						   'Problems occurs while uploading your document. Contact your administrator'
-					   );
-
-				return false;
+			$orcid = trim((string)($creator['orcid'] ?? ''));
+			if ($orcid !== '') {
+				$person['identifiers'] = [
+					['scheme' => 'orcid', 'identifier' => $orcid],
+				];
 			}
+
+			$result[] = ['person_or_org' => $person];
 		}
 
-		return true;
+		return $result;
 	}
 
+	/**
+	 * Map the legacy "access right" concept to the InvenioRDM access model:
+	 * - open: everything public
+	 * - embargoed: metadata public, files restricted until the embargo date
+	 * - restricted/closed: everything restricted
+	 */
+	private function mapAccess(array $form): array {
+		$right = (string)($form['accessRight'] ?? 'open');
 
-	public static function curlIt($url, $data) {
+		switch ($right) {
+			case 'embargoed':
+				return [
+					'record' => 'public',
+					'files' => 'restricted',
+					'embargo' => [
+						'active' => true,
+						'until' => trim((string)($form['embargoDate'] ?? '')),
+						'reason' => null,
+					],
+				];
 
-		$curl = curl_init($url);
-		//	curl_setopt($curl, CURLOPT_HEADER, false);
+			case 'restricted':
+			case 'closed':
+				return [
+					'record' => 'restricted',
+					'files' => 'restricted',
+				];
+
+			default:
+				return [
+					'record' => 'public',
+					'files' => 'public',
+				];
+		}
+	}
+
+	private function baseUrl(): string {
+		return $this->production ? self::API_PRODUCTION : self::API_SANDBOX;
+	}
+
+	/**
+	 * @param string $method HTTP method
+	 * @param string $path API path, starting with a slash
+	 * @param array $options 'json' (array to send as JSON) or 'file' (path to
+	 *                        a file to send as raw bytes)
+	 *
+	 * @return object decoded JSON response
+	 * @throws ZenodoApiException
+	 */
+	private function request(string $method, string $path, array $options = []): object {
+		$curl = curl_init($this->baseUrl() . $path);
+
+		$headers = [
+			'Authorization: Bearer ' . $this->token,
+			'Accept: application/json',
+			'User-Agent: nextcloud-zenodo/2.0',
+		];
+
+		$fileHandle = null;
+		if (isset($options['json'])) {
+			$headers[] = 'Content-Type: application/json';
+			curl_setopt($curl, CURLOPT_POSTFIELDS, json_encode($options['json']));
+		} elseif (isset($options['file'])) {
+			$headers[] = 'Content-Type: application/octet-stream';
+			$fileHandle = fopen($options['file'], 'rb');
+			curl_setopt($curl, CURLOPT_INFILE, $fileHandle);
+			curl_setopt($curl, CURLOPT_INFILESIZE, (int)filesize($options['file']));
+		}
+
+		curl_setopt($curl, CURLOPT_CUSTOMREQUEST, $method);
 		curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
-		curl_setopt(
-			$curl, CURLOPT_HTTPHEADER,
-			array(
-				sprintf(
-					'Content-type: %s',
-					(key_exists('content-type', $data)) ? $data['content-type'] : "application/json"
-				)
-			)
-		);
+		curl_setopt($curl, CURLOPT_HTTPHEADER, $headers);
+		curl_setopt($curl, CURLOPT_CONNECTTIMEOUT, 10);
+		curl_setopt($curl, CURLOPT_TIMEOUT, 300);
 
-		switch ($data['type']) {
+		$body = curl_exec($curl);
+		$status = (int)curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
+		$error = curl_error($curl);
+		curl_close($curl);
 
-			case self::REQUEST_TYPE_POST:
-				curl_setopt($curl, CURLOPT_POST, true);
-				if (key_exists('params', $data)) {
-					curl_setopt($curl, CURLOPT_POSTFIELDS, $data['params']);
-				}
-				break;
-
-			case self::REQUEST_TYPE_GET:
-//				curl_setopt($curl, CURLOPT_POST, true);
-//				curl_setopt($curl, CURLOPT_POSTFIELDS, $data['post']);
-				break;
+		if ($fileHandle !== null) {
+			fclose($fileHandle);
 		}
 
-		return json_decode(curl_exec($curl));
+		if ($body === false) {
+			throw new ZenodoApiException('Connection to Zenodo failed: ' . $error, 0);
+		}
+
+		$data = json_decode((string)$body);
+
+		if ($status >= 400) {
+			throw new ZenodoApiException($this->extractErrorMessage($data, $status), $status);
+		}
+
+		return $data ?? new \stdClass();
 	}
 
+	private function extractErrorMessage(?object $data, int $status): string {
+		$message = 'Zenodo returned an error (HTTP ' . $status . ')';
+
+		if ($data !== null && isset($data->message) && is_string($data->message)) {
+			$message = $data->message;
+		}
+
+		if ($data !== null && !empty($data->errors)) {
+			$first = $data->errors[0];
+			$field = (string)($first->field ?? '');
+			$detail = (string)($first->messages[0] ?? '');
+			if ($field !== '' || $detail !== '') {
+				$message .= ': ' . trim($field . ' ' . $detail);
+			}
+		}
+
+		return $message;
+	}
 }

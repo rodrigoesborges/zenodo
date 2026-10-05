@@ -23,12 +23,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-namespace OCA\Zenodo;
+namespace OCA\Zenodo\Exceptions;
 
-$app = new \OCA\Zenodo\AppInfo\Application();
+class ZenodoApiException extends \Exception {
 
-$response = $app->getContainer()
-				->query('SettingsController')
-				->admin();
-
-return $response->render();
+}

@@ -23,7 +23,27 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-$app = new \OCA\Zenodo\AppInfo\Application();
+namespace OCA\Zenodo\Listener;
 
-$app->registerInFiles();
-$app->registerSettingsAdmin();
+use OCA\Files\Event\LoadAdditionalScriptsEvent;
+use OCA\Zenodo\AppInfo\Application;
+use OCP\EventDispatcher\Event;
+use OCP\EventDispatcher\IEventListener;
+use OCP\Util;
+
+/**
+ * Loads the app scripts and styles whenever the Files app loads.
+ *
+ * @template-implements IEventListener<LoadAdditionalScriptsEvent>
+ */
+class LoadAdditionalScriptsListener implements IEventListener {
+
+	public function handle(Event $event): void {
+		if (!($event instanceof LoadAdditionalScriptsEvent)) {
+			return;
+		}
+
+		Util::addScript(Application::APP_ID, 'zenodo-main');
+		Util::addStyle(Application::APP_ID, 'navigate');
+	}
+}

@@ -23,28 +23,28 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-script('zenodo', 'admin');
+script('zenodo', 'zenodo-admin');
 style('zenodo', 'admin');
 
 ?>
-
-
-
-
-
-<div class="section" id="circles">
+<div class="section" id="zenodo">
 	<h2><?php p($l->t('Zenodo')) ?></h2>
 
-	<p>
-		<label><?php p($l->t('Sandbox Token')); ?></label><br />
-		<input type="text" id="sandboxtoken" />
-	</p>
-	<p>
-		<label><?php p($l->t('Production Token')); ?></label><br />
-		<input type="text" id="productiontoken" />
+	<p class="zenodo-settings-hint">
+		<?php p($l->t('Generate a token with the "deposit:write" scope on sandbox.zenodo.org (sandbox) and on zenodo.org (production), and store them below. All requests are sent with the account of the token owner.')); ?>
 	</p>
 
 	<p>
-		<input type="submit" id="tokensubmit" value="<?php p($l->t('Store Zenodo Credentials')); ?>">
+		<label for="sandboxtoken"><?php p($l->t('Sandbox token')) ?></label><br />
+		<input type="password" autocomplete="off" id="sandboxtoken" />
+	</p>
+	<p>
+		<label for="productiontoken"><?php p($l->t('Production token')) ?></label><br />
+		<input type="password" autocomplete="off" id="productiontoken" />
+	</p>
+
+	<p>
+		<button id="tokensubmit"><?php p($l->t('Store Zenodo credentials')) ?></button>
+		<span id="tokensubmit-status"></span>
 	</p>
 </div>

@@ -25,97 +25,88 @@
 
 namespace OCA\Zenodo\Service;
 
-use OC\Files\Filesystem;
-use OC\Files\View;
-use OCP\Files\NotFoundException;
+use OCP\Files\File;
+use OCP\Files\IRootFolder;
+use OCP\Files\Node;
+use OCP\IUserSession;
 
 class FileService {
 
-	private $userId;
-	private $configService;
-	private $miscService;
-
-	public function __construct($userId, $configService, $miscService) {
-		$this->userId = $userId;
-		$this->configService = $configService;
-		$this->miscService = $miscService;
+	public function __construct(
+		private IUserSession $userSession, private IRootFolder $rootFolder
+	) {
 	}
 
 	/**
-	 * get files from a userid+fileid
+	 * Returns the file nodes matching a file id for the current user.
 	 *
-	 * @param number $userId
-	 * @param number $fileId
-	 * @param array $options
-	 *
-	 * @return array
+	 * @return File[]
 	 */
-	public function getFilesPerFileId($fileId) {
-
-		if ($this->userId === '') {
-			return false;
+	public function getFilesPerFileId(int $fileId): array {
+		$userId = $this->getUserId();
+		if ($userId === '' || $fileId === 0) {
+			return [];
 		}
 
-		if ($fileId === '') {
-			return false;
-		}
-
-		$view = Filesystem::getView();
-
-		$data = array();
-		$file = self::getFileInfoFromFileId($fileId, $view);
-
-		if ($file === null) {
-			return false;
-		}
-
-		// no folder yet
-		if ($file->getType() === \OCP\Files\FileInfo::TYPE_FOLDER) {
-			return false;
-		}
-
-		$data[] = $file;
-
-		return $data;
-	}
-
-
-	// might work with encrypted file and remote file
-	public static function getAbsolutePath($file) {
-		$view = new View('/');
-		if ($file->getStorage()
-				 ->isLocal()
-		) {
-			return $view->getLocalFile($file->getPath());
-		}
-
-		return $view->toTmpFile($file->getPath(), true);
-	}
-
-
-	public static function getFileInfoFromFileId($fileId) {
 		try {
+			$userFolder = $this->rootFolder->getUserFolder($userId);
+			$nodes = $userFolder->getById($fileId);
+		} catch (\Exception $e) {
+			return [];
+		}
 
-			$view = Filesystem::getView();
-			if ($view === null) {
+		return array_values(array_filter(
+			$nodes,
+			static fn (Node $node) => $node instanceof File
+		));
+	}
+
+	/**
+	 * Returns a local absolute path for the file. If the file is not stored on
+	 * a local storage (remote mount, ...), a temporary copy is created and
+	 * 'temporary' is set to true so that the caller can delete it afterwards.
+	 *
+	 * @return array{path: string, temporary: bool}|null
+	 */
+	public function getLocalFile(File $file): ?array {
+		try {
+			if ($file->getStorage()->isLocal()) {
+				$path = $file->getStorage()->getLocalFile($file->getInternalPath());
+				if (is_string($path) && $path !== '') {
+					return ['path' => $path, 'temporary' => false];
+				}
+			}
+
+			$temporary = tempnam(sys_get_temp_dir(), 'zenodo_');
+			if ($temporary === false) {
 				return null;
 			}
 
-			$path = $view->getPath($fileId);
-			if ($path === null) {
+			$source = $file->fopen('rb');
+			$target = fopen($temporary, 'wb');
+			if ($source === false || $target === false) {
+				if (is_resource($source)) {
+					fclose($source);
+				}
+				if (is_resource($target)) {
+					fclose($target);
+				}
+				@unlink($temporary);
+
 				return null;
 			}
 
-			$file = $view->getFileInfo($path);
-			if ($file === null) {
-				return null;
-			}
+			stream_copy_to_stream($source, $target);
+			fclose($source);
+			fclose($target);
 
-			return $file;
-		} catch (NotFoundException $e) {
+			return ['path' => $temporary, 'temporary' => true];
+		} catch (\Exception $e) {
 			return null;
 		}
 	}
 
-
+	private function getUserId(): string {
+		return $this->userSession->getUser()?->getUID() ?? '';
+	}
 }

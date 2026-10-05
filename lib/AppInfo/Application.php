@@ -25,152 +25,27 @@
 
 namespace OCA\Zenodo\AppInfo;
 
-use \OCA\Zenodo\Controller\SettingsController;
-use \OCA\Zenodo\Controller\ZenodoController;
-use \OCA\Zenodo\Service\ConfigService;
-use \OCA\Zenodo\Service\ApiService;
-use \OCA\Zenodo\Service\FileService;
-use \OCA\Zenodo\Service\MiscService;
-use \OCA\Zenodo\Db\DepositionFilesMapper;
+use OCA\Files\Event\LoadAdditionalScriptsEvent;
+use OCA\Zenodo\Listener\LoadAdditionalScriptsListener;
 use OCP\AppFramework\App;
-use OCP\Util;
+use OCP\AppFramework\Bootstrap\IBootContext;
+use OCP\AppFramework\Bootstrap\IBootstrap;
+use OCP\AppFramework\Bootstrap\IRegistrationContext;
 
-class Application extends App {
+class Application extends App implements IBootstrap {
 
-	/**
-	 * @param array $params
-	 */
-	public function __construct(array $params = array()) {
-		parent::__construct('zenodo', $params);
-		$container = $this->getContainer();
+	public const APP_ID = 'zenodo';
 
-		/**
-		 * Controllers
-		 */
-		$container->registerService(
-			'MiscService', function ($c) {
-			return new MiscService($c->query('Logger'), $c->query('AppName'));
-		}
-		);
+	public function __construct(array $urlParams = []) {
+		parent::__construct(self::APP_ID, $urlParams);
+	}
 
-
-		$container->registerService(
-			'ConfigService', function ($c) {
-			return new ConfigService(
-				$c->query('AppName'), $c->query('CoreConfig'), $c->query('UserId'),
-				$c->query('MiscService')
-			);
-		}
-		);
-
-		$container->registerService(
-			'ApiService', function ($c) {
-			return new ApiService(
-				$c->query('ConfigService'), $c->query('FileService'), $c->query('MiscService')
-			);
-		}
-		);
-
-		$container->registerService(
-			'FileService', function ($c) {
-			return new FileService(
-				$c->query('UserId'), $c->query('ConfigService'), $c->query('MiscService')
-			);
-		}
-		);
-
-		/**
-		 * Controllers
-		 */
-		$container->registerService(
-			'SettingsController', function ($c) {
-			return new SettingsController(
-				$c->query('AppName'), $c->query('Request'), $c->query('ConfigService'),
-				$c->query('MiscService')
-			);
-		}
-		);
-
-		$container->registerService(
-			'ZenodoController', function ($c) {
-			return new ZenodoController(
-				$c->query('AppName'), $c->query('Request'), $c->query('UserId'),
-				$c->query('UserManager'),
-				$c->query('ConfigService'),
-				$c->query('ApiService'),
-				$c->query('DepositionFilesMapper'),
-				$c->query('MiscService')
-			);
-		}
-		);
-
-
-		/**
-		 * Mapper
-		 */
-		$container->registerService(
-			'DepositionFilesMapper', function ($c) {
-			return new DepositionFilesMapper(
-				$c->query('ServerContainer')
-				  ->getDatabaseConnection()
-			);
-		}
-		);
-
-		/**
-		 * Core
-		 */
-		$container->registerService(
-			'Logger', function ($c) {
-			return $c->query('ServerContainer')
-					 ->getLogger();
-		}
-		);
-		$container->registerService(
-			'CoreConfig', function ($c) {
-			return $c->query('ServerContainer')
-					 ->getConfig();
-		}
-		);
-
-		$container->registerService(
-			'UserId', function ($c) {
-			$user = $c->query('ServerContainer')
-					  ->getUserSession()
-					  ->getUser();
-
-			return is_null($user) ? '' : $user->getUID();
-		}
-		);
-
-		$container->registerService(
-			'UserManager', function ($c) {
-			return $c->query('ServerContainer')
-					 ->getUserManager();
-		}
+	public function register(IRegistrationContext $context): void {
+		$context->registerEventListener(
+			LoadAdditionalScriptsEvent::class, LoadAdditionalScriptsListener::class
 		);
 	}
 
-
-	public function registerInFiles() {
-		\OC::$server->getEventDispatcher()
-					->addListener(
-						'OCA\Files::loadAdditionalScripts', function () {
-						// add some animation
-						\OCP\Util::addScript('zenodo', 'jquery.animate-shadow-min');
-						\OCP\Util::addScript('zenodo', 'navigate');
-						\OCP\Util::addScript('zenodo', 'dialog');
-						\OCP\Util::addStyle('zenodo', 'navigate');
-					}
-					);
-	}
-
-
-	public function registerSettingsAdmin() {
-		\OCP\App::registerAdmin(
-			$this->getContainer()
-				 ->query('AppName'), 'lib/admin'
-		);
+	public function boot(IBootContext $context): void {
 	}
 }
-

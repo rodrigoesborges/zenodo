@@ -25,71 +25,67 @@
 
 namespace OCA\Zenodo\Db;
 
-//use \OCA\Zenodo\Db\DepositionFiles;
-//use \OCA\Zenodo\Model\DepositionFile;
-use OCP\AppFramework\Db\DoesNotExistException;
+use OCP\AppFramework\Db\QBMapper;
+use OCP\DB\QueryBuilder\IQueryBuilder;
 use OCP\IDBConnection;
-use OCP\AppFramework\Db\Mapper;
 
-class DepositionFilesMapper extends Mapper {
+/**
+ * @template-extends QBMapper<DepositionFiles>
+ */
+class DepositionFilesMapper extends QBMapper {
 
-	const TABLENAME = 'zenodo_depositions_files';
+	public const TABLENAME = 'zenodo_depositions_files';
 
 	public function __construct(IDBConnection $db) {
-		parent::__construct($db, self::TABLENAME, 'OCA\Zenodo\Db\DepositionFiles');
+		parent::__construct($db, self::TABLENAME, DepositionFiles::class);
 	}
 
-	public function find($id) {
-		try {
-			$sql = sprintf('SELECT * FROM *PREFIX*%s WHERE id = ?', self::TABLENAME);
-
-			return $this->findEntity($sql, [$id]);
-		} catch (DoesNotExistException $dnee) {
-			return null;
-		}
-
+	public function find(int $id): ?DepositionFiles {
+		return $this->findOneBy('id', $id);
 	}
 
-	public function findFile($fileId) {
-		try {
-			$sql = sprintf('SELECT * FROM *PREFIX*%s WHERE file_id = ?', self::TABLENAME);
-
-			return $this->findEntity($sql, [$fileId]);
-		} catch (DoesNotExistException $dnee) {
-			return null;
-		}
+	public function findFile(int $fileId): ?DepositionFiles {
+		return $this->findOneBy('file_id', $fileId);
 	}
 
-
-
-	public function findDeposit($depositId) {
-		try {
-			$sql = sprintf('SELECT * FROM *PREFIX*%s WHERE deposit_id = ?', self::TABLENAME);
-
-			return $this->findEntity($sql, [$depositId]);
-		} catch (DoesNotExistException $dnee) {
-			return null;
-		}
+	public function findDeposit(int $depositId): ?DepositionFiles {
+		return $this->findOneBy('deposit_id', $depositId);
 	}
 
-
-	// force will delete whichever type of the entry. if not, only delete sandbox entry
-	public function deleteFile(DepositionFiles $entry, $force) {
-		try {
-			$sql = sprintf(
-				'DELETE FROM *PREFIX*%s WHERE file_id = ? %s', self::TABLENAME,
-				(($force) ? '' : "AND type='sandbox'")
+	/**
+	 * Delete the rows related to a file. If $force is false, only the rows
+	 * pointing to the sandbox are deleted, keeping the history of the files
+	 * already published on the production Zenodo.
+	 */
+	public function deleteFile(int $fileId, bool $force): void {
+		$qb = $this->db->getQueryBuilder();
+		$qb->delete(self::TABLENAME)
+			->where(
+				$qb->expr()->eq(
+					'file_id', $qb->createNamedParameter($fileId, IQueryBuilder::PARAM_INT)
+				)
 			);
 
-			return $this->execute($sql, [$entry->getFileId()]);
-
-		} catch (DoesNotExistException $dnee) {
-			return null;
+		if (!$force) {
+			$qb->andWhere(
+				$qb->expr()->eq('type', $qb->createNamedParameter('sandbox'))
+			);
 		}
 
-		return $entry;
+		$qb->executeStatement();
 	}
 
+	private function findOneBy(string $column, int $value): ?DepositionFiles {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')
+			->from(self::TABLENAME)
+			->where(
+				$qb->expr()->eq(
+					$column, $qb->createNamedParameter($value, IQueryBuilder::PARAM_INT)
+				)
+			)
+			->setMaxResults(1);
 
+		return $this->findEntities($qb)[0] ?? null;
+	}
 }
-

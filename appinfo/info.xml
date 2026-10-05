@@ -5,20 +5,23 @@
 	<name>Zenodo</name>
 	<summary>Publish your work to Zenodo.org</summary>
 	<description>based on files_zenodo written by Lars Næsbye Christensen, DeIC</description>
-	<version>1.1.0</version>
+	<version>2.0.0</version>
 	<licence>agpl</licence>
 	<author>Maxence Lange</author>
 	<author>Lars Næsbye Christensen</author>
 	<documentation>
-		<admin>https://github.com/nextcloud/zenodo/wiki</admin>
+		<admin>https://github.com/rodrigoesborges/zenodo/wiki</admin>
 	</documentation>
 	<category>tools</category>
 	<category>files</category>
-	<website>https://github.com/nextcloud/zenodo</website>
-	<bugs>https://github.com/nextcloud/zenodo/issues</bugs>
-	<repository type="git">https://github.com/nextcloud/zenodo.git</repository>
-	<screenshot>https://raw.githubusercontent.com/nextcloud/zenodo/master/screenshots/dialogpopup.png</screenshot>
+	<website>https://github.com/rodrigoesborges/zenodo</website>
+	<bugs>https://github.com/rodrigoesborges/zenodo/issues</bugs>
+	<repository type="git">https://github.com/rodrigoesborges/zenodo.git</repository>
+	<screenshot>https://raw.githubusercontent.com/rodrigoesborges/zenodo/master/screenshots/dialogpopup.png</screenshot>
 	<dependencies>
-		<nextcloud min-version="14" max-version="20"/>
+		<nextcloud min-version="33" max-version="36"/>
 	</dependencies>
+	<settings>
+		<admin>OCA\Zenodo\Settings\Admin</admin>
+	</settings>
 </info>

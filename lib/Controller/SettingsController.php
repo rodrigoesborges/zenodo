@@ -25,57 +25,40 @@
 
 namespace OCA\Zenodo\Controller;
 
-use \OCA\Zenodo\Service\ConfigService;
-use OCA\Zenodo\Service\MiscService;
+use OCA\Zenodo\Service\ConfigService;
 use OCP\AppFramework\Controller;
-use OCP\AppFramework\Http\TemplateResponse;
 use OCP\IRequest;
-use Punic\Misc;
 
 class SettingsController extends Controller {
 
-	private $configService;
-
-	private $miscService;
+	private ConfigService $configService;
 
 	public function __construct(
-		$appName, IRequest $request, ConfigService $configService, MiscService $miscService
+		string $appName, IRequest $request, ConfigService $configService
 	) {
 		parent::__construct($appName, $request);
 		$this->configService = $configService;
-		$this->miscService = $miscService;
 	}
 
-	//
-	// Admin
-	//
-
-	/**
-	 * @NoCSRFRequired
-	 */
-	public function admin() {
-		return new TemplateResponse($this->appName, 'settings.admin', [], 'blank');
+	public function getZenodoInfo(): array {
+		return $this->settings();
 	}
 
-	public function getZenodoInfo() {
-		$params = [
-			'tokenSandbox' => $this->configService->getAppValue(
-				ConfigService::ZENODO_TOKEN_SANDBOX
-			),
-			'tokenProduction' => $this->configService->getAppValue(
-				ConfigService::ZENODO_TOKEN_PRODUCTION
-			)
-		];
-
-		return $params;
-	}
-
-	public function setZenodoInfo($token_sandbox, $token_production) {
-		$this->configService->setAppValue(ConfigService::ZENODO_TOKEN_SANDBOX, $token_sandbox);
+	public function setZenodoInfo($token_sandbox, $token_production): array {
 		$this->configService->setAppValue(
-			ConfigService::ZENODO_TOKEN_PRODUCTION, $token_production
+			ConfigService::TOKEN_SANDBOX, trim((string)$token_sandbox)
+		);
+		$this->configService->setAppValue(
+			ConfigService::TOKEN_PRODUCTION, trim((string)$token_production)
 		);
 
-		return $this->getZenodoInfo();
+		return $this->settings();
+	}
+
+	private function settings(): array {
+		return [
+			'tokenSandbox' => $this->configService->getAppValue(ConfigService::TOKEN_SANDBOX),
+			'tokenProduction' => $this->configService->getAppValue(ConfigService::TOKEN_PRODUCTION),
+		];
 	}
 }

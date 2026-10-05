@@ -1,94 +1,96 @@
-.icon-zenodo {
-	background-image: url('../img/zenodo_z.svg');
+.zenodo-modal-overlay {
+	position: fixed;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	background: rgba(0, 0, 0, 0.5);
+	z-index: 9998;
+	display: flex;
+	align-items: center;
+	justify-content: center;
 }
 
-BUTTON.ui-dialog-titlebar-close {
-	visibility: hidden;
+#zenodo-dialog {
+	position: relative;
+	background: var(--color-main-background, #fff);
+	color: var(--color-main-text, #222);
+	border-radius: var(--border-radius-large, 4px);
+	box-shadow: 0 0 20px rgba(0, 0, 0, 0.4);
+	padding: 20px;
+	width: 90%;
+	max-width: 720px;
+	max-height: 85vh;
+	overflow-y: auto;
 }
 
-#zenodo_loading {
+#zenodo-dialog .hidden {
+	display: none;
+}
+
+#zenodo-dialog-title {
+	margin: 0 0 12px 0;
+	font-size: 16px;
+	font-weight: bold;
+}
+
+#zenodo-loading {
 	height: 40px;
 	width: 40px;
 	position: absolute;
-	left: 45%;
+	left: 50%;
 	top: 50%;
+	margin: -20px 0 0 -20px;
+	background-image: url('../img/loading.svg');
 	background-size: contain;
-	margin: 0 auto;
-}
-
-#zenodo_dialog {
-	height: 100%;
-}
-
-#zenodo_dialog_buttons {
-	width: 100%;
-	position: absolute;
-	bottom: 0px;
-	left: 0px;
-	border-top: #ddd 1px solid;
-}
-
-#zenodo_dialog_close {
-	background: #ececec;
-	width: 34%;
-}
-
-#zenodo_dialog_sandbox {
-	background: #e4e4e4;
-}
-
-#zenodo_dialog_production {
-	background: #dcdcdc;
-}
-
-DIV.zenodo_dialog_button {
-	display: inline-block;
-	width: 33%;
-	height: 50px;
-	text-align: center;
-	vertical-align: center;
-	line-height: 50px;
-	font-weight: bold;
-	cursor: pointer;
-}
-
-DIV.zenodo_dialog_button_50 {
-	display: inline-block;
-	width: 50% !important;
-	height: 50px;
-	text-align: center;
-	vertical-align: center;
-	line-height: 50px;
-	font-weight: bold;
-	cursor: pointer;
-}
-
-DIV.zenodo_dialog_shadow {
-	-moz-box-shadow: 3px 3px 5px #5151514D;
-	-webkit-box-shadow: 3px 3px 5px #5151514D;
-	box-shadow: 3px 3px 5px #5151514D;
-}
-
-#zenodo_end {
-	width: 90%;
-	text-align: center;
-	height: 40px;
-	top: 42%;
-	font-style: italic;
-	position: absolute;
+	background-repeat: no-repeat;
 }
 
 #zenodo_error {
 	width: 100%;
 	font-style: italic;
-	color: #f33;
+	color: var(--color-error, #e9322d);
+}
+
+.zenodo-modal-footer {
+	display: flex;
+	gap: 8px;
+	justify-content: flex-end;
+	margin-top: 16px;
+}
+
+.zenodo-btn {
+	padding: 8px 14px;
+	border-radius: var(--border-radius-element, 4px);
+	background-color: var(--color-background-dark, #eee);
+	border: 1px solid var(--color-border-dark, #ddd);
+	color: var(--color-main-text, #222);
+	cursor: pointer;
+	font-weight: bold;
+}
+
+.zenodo-btn:hover,
+.zenodo-btn:focus {
+	border-color: var(--color-main-text, #222);
+}
+
+.zenodo-btn-primary {
+	background-color: var(--color-primary, #0082c9);
+	color: var(--color-primary-text, #fff);
+	border: 1px solid var(--color-primary, #0082c9);
+}
+
+.zenodo-btn-primary:hover,
+.zenodo-btn-primary:focus {
+	background-color: var(--color-primary-hover, #0073c0);
+	border-color: var(--color-primary-hover, #0073c0);
 }
 
 TD.zendialog_left {
 	font-weight: bold;
 	width: 180px;
 	text-align: right;
-	background: #eee;
+	background: var(--color-background-dark, #eee);
 }
 
 TD.zendialog_creator_left {
@@ -124,34 +126,6 @@ SPAN.zendialog_sub {
 	cursor: pointer;
 }
 
-DIV.zendialog_result {
-	width: 200px;
-	padding: 10px;
-	text-align: left;
-}
-
-DIV.zendialog_result:hover {
-	background: #adadad33;
-	cursor: pointer;
-}
-
-#zendialog_creator_search_result {
-	position: absolute;
-	z-index: 5;
-	border-radius: 4px;
-	border: solid 1px #00000066;
-	color: #000000aa;
-	background: #ffffffdd;
-}
-
-#zendialog_creator_search_result > #zendialog_creator_search {
-	position: relative;
-	top: 30px;
-	left: -10px;
-	width: 150px;
-	height: 30px;
-}
-
 #zendialog_creator_syntax_error {
-	color: #f33;
+	color: var(--color-error, #e9322d);
 }
